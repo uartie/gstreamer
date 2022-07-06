@@ -97,6 +97,7 @@ enum
   PROP_DISPLAY_HEIGHT,
   PROP_CONNECTOR_PROPS,
   PROP_PLANE_PROPS,
+  PROP_FD,
   PROP_N,
 };
 
@@ -729,10 +730,17 @@ gst_kms_sink_start (GstBaseSink * bsink)
   pres = NULL;
   plane = NULL;
 
-  if (self->devname || self->bus_id)
-    self->fd = drmOpen (self->devname, self->bus_id);
-  else
-    self->fd = kms_open (&self->devname);
+  /* open our own internal device fd if application did not supply its own */
+  if (self->is_internal_fd) {
+    if (self->devname || self->bus_id)
+      self->fd = drmOpen (self->devname, self->bus_id);
+    else
+      self->fd = kms_open (&self->devname);
+  } else {
+    g_free (self->devname);
+    self->devname = drmGetDeviceNameFromFd (self->fd);
+  }
+
   if (self->fd < 0)
     goto open_failed;
 
@@ -838,7 +846,8 @@ bail:
     drmModeFreeResources (res);
 
   if (!ret && self->fd >= 0) {
-    drmClose (self->fd);
+    if (self->is_internal_fd)
+      drmClose (self->fd);
     self->fd = -1;
   }
 
@@ -945,7 +954,8 @@ gst_kms_sink_stop (GstBaseSink * bsink)
   }
 
   if (self->fd >= 0) {
-    drmClose (self->fd);
+    if (self->is_internal_fd)
+      drmClose (self->fd);
     self->fd = -1;
   }
 
@@ -1827,6 +1837,11 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
 
       break;
     }
+    case PROP_FD:
+      g_assert (sink->fd < 0);
+      sink->fd = g_value_get_int (value);
+      sink->is_internal_fd = (sink->fd < 0) ? TRUE : FALSE;
+      break;
     default:
       if (!gst_video_overlay_set_property (object, PROP_N, prop_id, value))
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1880,6 +1895,9 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
     case PROP_PLANE_PROPS:
       gst_value_set_structure (value, sink->plane_props);
       break;
+    case PROP_FD:
+      g_value_set_int (value, sink->fd);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1906,6 +1924,7 @@ static void
 gst_kms_sink_init (GstKMSSink * sink)
 {
   sink->fd = -1;
+  sink->is_internal_fd = TRUE;
   sink->conn_id = -1;
   sink->plane_id = -1;
   sink->can_scale = TRUE;
@@ -2077,6 +2096,17 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       g_param_spec_boxed ("plane-properties", "Connector Plane",
       "Additional properties for the plane",
       GST_TYPE_STRUCTURE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+
+  /**
+   * kmssink:fd:
+   *
+   * You can supply your own DRM file descriptor.  By default, the sink will
+   * open its own DRM file descriptor.
+   */
+  g_properties[PROP_FD] =
+    g_param_spec_int ("fd", "File Descriptor",
+    "DRM file descriptor", -1, G_MAXINT, -1,
+    G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   g_object_class_install_properties (gobject_class, PROP_N, g_properties);
 
