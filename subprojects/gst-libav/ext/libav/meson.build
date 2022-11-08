@@ -11,6 +11,7 @@ sources = [
     'gstavdemux.c',
     'gstavmux.c',
     'gstavdeinterlace.c',
+    'gstavcompare.c',
 ]
 
 gstlibav_plugin = library('gstlibav',
