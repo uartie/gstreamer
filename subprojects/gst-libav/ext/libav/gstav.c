@@ -163,6 +163,7 @@ plugin_init (GstPlugin * plugin)
   gst_ffmpegmux_register (plugin);
   gst_ffmpegdeinterlace_register (plugin);
   gst_ffmpegcompare_register (plugin);
+  gst_ffmpegvidcmp_register (plugin);
 
   /* Now we can return the pointer to the newly created Plugin object. */
   return TRUE;
