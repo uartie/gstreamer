@@ -453,6 +453,7 @@ gst_ffmpegvidcmp_sink_query (GstCollectPads * pads, GstCollectData * data,
 
   switch (GST_QUERY_TYPE (query)) {
     case GST_QUERY_ALLOCATION:
+      gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, NULL);
       if (pad == self->sinkpad1)
         return gst_pad_peer_query (self->srcpad, query);
       break;
